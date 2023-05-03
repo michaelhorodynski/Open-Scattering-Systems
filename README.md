@@ -28,13 +28,13 @@ Licence
 
 For full licensing details see LICENSE.md.
 
-This version of the toolbox can be referenced by citing the following paper
+Open scattering systems can be referenced by citing the following paper
 
 > Michael Horodynski, Tobias Reiter, Matthias Kühmayer, and Stefan Rotter
 > "Tractor beams with optimal pulling force using structured waves",
 > [arXiv](http://arxiv.org/XXX)
 
-or by directly citing the toolbox
+or by directly citing
 
 > Michael Horodynski, Tobias Reiter, Matthias Kühmayer, and Stefan Rotter
 > "Open scattering systems", https://github.com/michaelhorodynski/Open-Scattering-Systems
@@ -43,7 +43,7 @@ Contact us
 ----------
 
 The best person to contact for inquiries about open scattering systems
-is [Michael Horodynski](mailto:michael.horodynski@gmail.com)
+is [Michael Horodynski](mailto:michael.horodynski@gmail.com).
 
 File listing
 ------------
