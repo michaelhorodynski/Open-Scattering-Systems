@@ -34,23 +34,6 @@ Open scattering systems can be referenced by citing the following paper
 > "Tractor beams with optimal pulling force using structured waves",
 > [arXiv](http://arxiv.org/XXX)
 
-or by directly citing
-
-> Michael Horodynski, Tobias Reiter, Matthias Kühmayer, and Stefan Rotter
-> "Open scattering systems", https://github.com/michaelhorodynski/Open-Scattering-Systems
-
-and the respective Bibtex entry
-
-```latex
-@misc{horodynski_open_2023,
-  author = {Horodynski, Michael and Reiter, Tobias and Kühmayer, Mattthias and Rotter, Stefan},
-  title = {Open Scattering Systems},
-  year = {2023},
-  publisher = {GitHub},
-  howpublished = {\url{https://github.com/michaelhorodynski/Open-Scattering-Systems}}}
-}
-```
-
 Contact us
 ----------
 
