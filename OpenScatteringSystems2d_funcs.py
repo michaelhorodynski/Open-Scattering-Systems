@@ -525,7 +525,8 @@ def CalcSMat(params, pphwl=20, fluxNorm=False, msgOutput=False, dk=0.):
     # Interpolate incoming and outgoing solutions to regular grid
 
     for m in range(2*nIn+1):
-        solsOut[:,m] = sols[m](mesh(pCirc[:,0], pCirc[:,1]))[:,0]
+        for (i, phi) in enumerate(phis):
+            solsOut[i,m] = sols[m](mesh(pmlRad*np.cos(phi), pmlRad*np.sin(phi)))
 
     S = np.zeros((2*nOut+1, 2*nIn+1), dtype=complex)
 
@@ -595,11 +596,11 @@ def CalcKyInOperator(params): # Check if correct
     pmlRad = params['pmlRad']
     
     hn = np.abs(sp.special.hankel1(np.arange(-nIn,nIn+1),k*pmlRad))
-    kx = np.diag(hn[:-1]/hn[1:] + hn[1:]/hn[:-1], k=-1) + np.diag(hn[1:]/hn[:-1] + hn[:-1]/hn[1:], k=1)
+    ky = np.diag(hn[:-1]/hn[1:] + hn[1:]/hn[:-1], k=-1) + np.diag(hn[1:]/hn[:-1] + hn[:-1]/hn[1:], k=1)
     
-    return k/4*kx
+    return k/4*ky
 
-def CalcGWSOperator(params, S, dx, restrict=True, phicoefs=None, kxIn=None, angle=np.pi/2, sort='real', deriv=True):
+def CalcGWSOperator(params, S, dx, restrict=True, phicoefs=None, kIn=None, kOut=None, angle=np.pi/2, sort='real', deriv=True):
     
     nIn = params['nIn']
 
@@ -612,7 +613,7 @@ def CalcGWSOperator(params, S, dx, restrict=True, phicoefs=None, kxIn=None, angl
     if deriv is True:
 
         if restrict is True:
-            S_res = np.zeros((2*nIn+1,2*nIn+1,R.shape[2]), dtype=complex)
+            S_res = np.zeros((2*nIn+1,2*nIn+1,S.shape[2]), dtype=complex)
 
             for i in range(S.shape[2]):
                 S_res[:,:,i] = phicoefs.T.conj() @ S[:,:,i] @ phicoefs
@@ -625,9 +626,11 @@ def CalcGWSOperator(params, S, dx, restrict=True, phicoefs=None, kxIn=None, angl
 
     else:
 
-        if kxIn is None:
-            kxIn = CalcKxInOperator(params)    
-        Q = kxIn - S.conj().T @ kxIn @ S
+        if kIn is None:
+            kIn = CalcKxInOperator(params)
+        if kOut is None:
+            kOut = CalcKxInOperator(params)    
+        Q = kIn - S.conj().T @ kOut @ S
 
         if restrict is True:
 
@@ -665,7 +668,7 @@ def CalcForce(params, coefs, nums, scatPos, npts, scatRad=None, scatShape=None, 
             # Set up grids at the boundary of the dielectric cylindrical scatterer
             phis = np.linspace(0,2.0*np.pi,npts)
             # Manually read out the state
-            EgradVec = Egrad(mesh(scatPos[0]+(1+d)*scatRad*np.cos(phis), scatPos[1]+(1+d)*scatRad*np.sin(phis)))
+            EgradVec = np.array([Egrad(mesh(scatPos[0]+(1+d)*scatRad*np.cos(phi), scatPos[1]+(1+d)*scatRad*np.sin(phi))) for phi in phis])
             f = np.abs(EgradVec[:,0])**2 + np.abs(EgradVec[:,1])**2
             # Manually integrate it
             force[i,0] = np.trapz(np.cos(phis)*f, x=phis, axis=0)
@@ -685,16 +688,18 @@ def CalcForce(params, coefs, nums, scatPos, npts, scatRad=None, scatShape=None, 
                 normal = np.array([[0,1],[-1,0]])@np.array([xoff,yoff])
 
                 if np.isclose(xoff,0.): # vertical line
-                    spacing = yoff / (npts - 1)
+                    spacing = np.abs(yoff) / (npts - 1)
                     ptsOut = np.vstack((x + np.sign(yoff)*d, y))
-                    EgradVec = Egrad(mesh(ptsOut[0,:], ptsOut[1,:]))
+                    EgradVec = np.array([Egrad(mesh(ptsOut[0,i], ptsOut[1,i])) for i in range(len(ptsOut[0,:]))])
+                    #EgradVec = Egrad(mesh(ptsOut[0,:], ptsOut[1,:]))
                     fx = np.abs(EgradVec[:,0])**2
                     force[i,0] += np.trapz(np.sign(normal[0])*fx, dx=spacing)
 
                 elif np.isclose(yoff,0.): # horizontal line
-                    spacing = xoff / (npts - 1)
+                    spacing = np.abs(xoff) / (npts - 1)
                     ptsOut = np.vstack((x, y - np.sign(xoff)*d))
-                    EgradVec = Egrad(mesh(ptsOut[0,:], ptsOut[1,:]))
+                    EgradVec = np.array([Egrad(mesh(ptsOut[0,i], ptsOut[1,i])) for i in range(len(ptsOut[0,:]))])
+                    #EgradVec = Egrad(mesh(ptsOut[0,:], ptsOut[1,:]))
                     fy = np.abs(EgradVec[:,1])**2
                     force[i,1] += np.trapz(np.sign(normal[1])*fy, dx=spacing)
 
@@ -713,7 +718,8 @@ def CalcForce(params, coefs, nums, scatPos, npts, scatRad=None, scatShape=None, 
                     else:
                         ptsOut = np.vstack((x - dx, y + dy))
 
-                    EgradVec = Egrad(mesh(ptsOut[0,:], ptsOut[1,:]))
+                    EgradVec = np.array([Egrad(mesh(ptsOut[0,i], ptsOut[1,i])) for i in range(len(ptsOut[0,:]))])
+                    #EgradVec = Egrad(mesh(ptsOut[0,:], ptsOut[1,:]))
                     fx = np.abs(EgradVec[:,0])**2
                     fy = np.abs(EgradVec[:,1])**2
 
@@ -724,7 +730,8 @@ def CalcForce(params, coefs, nums, scatPos, npts, scatRad=None, scatShape=None, 
 
 def PlotStates(params, coefs, nums, plot='abs2', method='imshow', interpolation='bilinear', cmap='jet', ctype='linear', cscale=None, clim=None, scatPos=np.array([]), 
     scatRad=0.0, scatShape='circ', scatLineWidth=None, pphwl=20, dpi=300, fileName=None, fileFormat='png', widthInches=20, rMinMax=None, phiMinMax=None, rectWidth2=None, 
-    mCols=None, title=None, shiftAng=0.0, polyPts=None, polyCodes=None, msgOutput=False, returnData=False):
+    mCols=None, title=None, shiftAng=0.0, polyPts=None, polyCodes=None, msgOutput=False, returnData=False, colorBar=False, 
+    colorBarLabel=True, colorBarTicks='MinMax', colorBarSize="1.5%", colorBarPad=0.25, colorBarLabelPad=15, fontSize=17):
     
     # Convert required parameter dictionary entries to local variables
     pmlRad = params['pmlRad']
@@ -848,7 +855,7 @@ def PlotStates(params, coefs, nums, plot='abs2', method='imshow', interpolation=
         plt.gca().axes.get_yaxis().set_visible(False)
 
         if method == 'imshow':
-            plt.imshow(stateGrid, origin='lower', interpolation=interpolation, cmap=cmap, extent=(-pmlRad,pmlRad,-pmlRad,pmlRad))
+            hi = plt.imshow(stateGrid, origin='lower', interpolation=interpolation, cmap=cmap, extent=(-pmlRad,pmlRad,-pmlRad,pmlRad))
             if clim is not None:
                 plt.clim(0,clim)
             # Draw boundary
@@ -908,6 +915,35 @@ def PlotStates(params, coefs, nums, plot='abs2', method='imshow', interpolation=
             [X,Y] = np.meshgrid(xpts, xpts)
             plt.pcolor(X, Y, statesGrid[:,:,n], cmap=cmap, shading='gouraud')
             plt.axes().set_aspect('equal')
+        if colorBar is True:
+            from mpl_toolkits.axes_grid1 import make_axes_locatable
+            ax = plt.gca()
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes("right", size=colorBarSize, pad=colorBarPad)
+            cbar = plt.colorbar(hi, cax=cax, orientation="vertical")
+            cbar.ax.tick_params(labelsize=fontSize)
+            if colorBarLabel is True:
+                if plot == 'abs2':
+                    cbarLabel = r'$|\psi|^2$'
+                elif plot == 'abs':
+                    cbarLabel = r'$|\psi|$'
+                elif plot == 'real':
+                    cbarLabel = r'Re($\psi$)'
+                elif plot == 'imag':
+                    cbarLabel = r'Im($\psi$)'
+                elif plot == 'phase':
+                    cbarLabel = r'Arg($\psi$)'
+                if colorBarTicks == 'MinMax':
+                    cbar.set_label(cbarLabel, size=fontSize, labelpad=colorBarLabelPad-40)
+                else:
+                    cbar.set_label(cbarLabel, size=fontSize, labelpad=colorBarLabelPad)
+                plt.clim([np.nanmin(stateGrid), np.nanmax(stateGrid)])
+            if colorBarTicks is False:
+                cbar.set_ticks([])
+                cbar.set_ticklabels([])
+            elif colorBarTicks == 'MinMax':
+                cbar.set_ticks([np.nanmin(stateGrid), np.nanmax(stateGrid)])
+                cbar.set_ticklabels(['Min', 'Max'])
         plt.tight_layout()
 
         # Show or save image
@@ -1078,3 +1114,338 @@ def PlotScatteringConfiguration(params, scatPos, scatRad, scatShape='circ', scat
         plt.savefig(fileName+'.png', bbox_inches='tight', dpi=dpi)
     else:
         plt.show()
+
+def CreateMesh(params, scatPos=np.array([[],[]]), scatRad=np.array([]), scatNr=1.0, scatNrLast=None, scatNi=0.0, scatNiLast=None, 
+               uniformNr=1.0, uniformNi=0.0, sqphwl=None, ROI=None, ROICenter=None, pixNr=None, pmlLength=None, msgOutput=True, meshScatRefine=True, 
+               meshEdgeRefine=True, meshCurve=True):
+
+    """
+    Create a scattering geometry consisting of a circular scattering region bounded by a perfectly matched layer (PML) region to absorb all outgoing waves
+    """
+
+    # Convert required parameter dictionary entries to local variables
+    nphwl = params['nphwl']
+    k = params['k']
+    feOrder = params['feOrder']
+
+    numScat = len(scatPos[0,:])
+
+    if type(scatNr) is not np.ndarray and scatNr != 1.0:
+        scatNr = scatNr*np.ones(numScat) 
+    elif type(scatNr) is not np.ndarray and scatNr == 1.0:
+        scatNr = np.ones(numScat) 
+    if scatNrLast != None:
+        scatNr[-1] = scatNrLast
+            
+    if type(scatNi) is not np.ndarray and scatNi != 0.0:
+        scatNi = scatNi*np.ones(numScat) 
+    elif type(scatNi) is not np.ndarray and scatNi == 0.0:
+        scatNi = np.zeros(numScat) 
+    if scatNiLast != None:
+        scatNi[-1] = scatNiLast
+
+    # Values used for refinement of edges in the empty geometry or of polygonal scatterers
+    maxhVac = (2*np.pi/k)/2.0/nphwl
+    if meshEdgeRefine is True:
+        maxhEdge = maxhVac/5.0
+    else:
+        maxhEdge = maxhVac
+    refVal = 0
+    refOrder = 3
+    refFactor = 0.5
+
+    # If not given, choose length of PML as nlambda times the longest wavelength in propagation direction which gets dampened the least
+    if pmlLength is None:
+        nlambda = 1.5
+        lambdaMax = 2.0*np.pi/k
+        pmlLength = nlambda*lambdaMax
+        
+    if 'pmlRad' in params.keys():
+        pmlRad = params['pmlRad']
+    else:
+        pmlRad = 0.1
+        params['pmlRad'] = pmlRad
+
+    # Define edge points for waveguide boundary and input and output PML
+    geo = SplineGeometry()
+    
+    geo.AddCircle((0, 0), pmlRad,  leftdomain=1, rightdomain=2, bc="input")
+    geo.AddCircle((0, 0), pmlRad+pmlLength,  leftdomain=2, rightdomain=0, bc="wall")
+    
+    # Add points for pixel structure
+    if sqphwl is not None:
+        dyRes = (2*np.pi/np.real(k))/2.0/float(sqphwl)
+        dxRes = dyRes
+        Ny = int(np.ceil(ROI[1]/dyRes))
+        Nx = int(np.ceil(ROI[0]/dxRes))
+        dxRes = ROI[0]/Nx
+        dyRes = ROI[1]/Ny
+        params['Ny'] = Ny
+        params['Nx'] = Nx
+    
+        scatDom = np.arange(4,4+Nx*Ny).reshape(Nx,Ny)
+    
+        for i in range(Nx):
+            for j in range(Ny):
+                if j == 0:
+                    leftdomain1 = scatDom[i,j]
+                    rightdomain1 = 1
+                else:
+                    leftdomain1 = scatDom[i,j]
+                    rightdomain1 = scatDom[i,j] - 1
+                if i == 0:
+                    leftdomain2 = 1
+                    rightdomain2 = scatDom[i,j]
+                else:
+                    leftdomain2 = scatDom[i,j] - Ny
+                    rightdomain2 = scatDom[i,j]
+    
+                xposLR = dxRes*np.array([i,i+1]) + ROICenter[0] - Nx/2*dxRes
+                yposLR = dyRes*np.array([j,j]) + ROICenter[1] - Ny/2*dyRes
+    
+                geo.Append (["line", geo.AppendPoint(xposLR[0], yposLR[0]), 
+                             geo.AppendPoint(xposLR[1], yposLR[1])], leftdomain=leftdomain1, 
+                            rightdomain=rightdomain1, bc='scat')
+    
+                xposUD = dxRes*np.array([i,i]) + ROICenter[0] - Nx/2*dxRes
+                yposUD = dyRes*np.array([j,j+1]) + ROICenter[1] - Ny/2*dyRes
+    
+                geo.Append (["line", geo.AppendPoint(xposUD[0], yposUD[0]), 
+                             geo.AppendPoint(xposUD[1], yposUD[1])], leftdomain=leftdomain2, 
+                            rightdomain=rightdomain2, bc='scat')
+    
+        for i in range(Nx):
+                xposU = dxRes*np.array([i,i+1]) + ROICenter[0] - Nx/2*dxRes
+                yposU = dyRes*np.array([Ny,Ny]) + ROICenter[1] - Ny/2*dyRes
+                geo.Append (["line", geo.AppendPoint(xposU[0], yposU[0]), 
+                             geo.AppendPoint(xposU[1], yposU[1])], leftdomain=1, 
+                            rightdomain=scatDom[i,-1], bc='scat')
+    
+        for i in range(Ny):
+                xposR = dxRes*np.array([Nx,Nx]) + ROICenter[0] - Nx/2*dxRes
+                yposR = dyRes*np.array([i,i+1]) + ROICenter[1] - Ny/2*dyRes
+                geo.Append (["line", geo.AppendPoint(xposR[0], yposR[0]), 
+                             geo.AppendPoint(xposR[1], yposR[1])], leftdomain=scatDom[-1,i], 
+                            rightdomain=1, bc='scat')
+        
+    # Add randomly placed scatterers
+    if numScat > 0:
+        
+        # Create domain numbers for different scatterers using their refractive index (including the shifts). Since np.unique
+        # returns a sorted array, the metallic scatterers with index > 1e3 are the last and will be given domain 0
+        useDirichlet = 1e3
+        scatNrefrAll = scatNr + 1.0j*scatNi
+        scatNrefrUnique = np.unique(scatNrefrAll)
+        scatDom = np.zeros(numScat)
+        if type(scatNrefrUnique) is np.ndarray:
+            for i in range(len(scatNrefrUnique)):
+                # If refractive index is smaller than 1e3, give different domain number, otherwise let the domain be 0 and use 
+                # Dirichlet "wall" boundary condition to force wave to zero
+                if scatNrefrUnique[i] < useDirichlet:
+                    scatDom[scatNrefrAll == scatNrefrUnique[i]] = 4+Nx*Ny+i;
+        scatDom = scatDom.astype(int)
+        
+        # If single radius given, convert to array
+        if type(scatRad) is not np.ndarray:
+            scatRad = scatRad*np.ones(numScat) 
+  
+        # Add scatterers
+        for i in range(numScat):
+            bcScat = 'scat'
+            # Set boundary to wall such that it is treated as Dirichlet zero-boundary condition in Solve
+            if scatDom[i] == 0:
+                bcScat = 'wall'
+            geo.AddCircle((scatPos[0,i], scatPos[1,i]), scatRad[i],  leftdomain=scatDom[i], rightdomain=1, bc=bcScat)
+
+        # Assigning material names to domains
+        geo.SetMaterial(1, "air")
+        geo.SetMaterial(2, "pml")
+        geo.SetMaterial(3, "pml")
+        
+        nmats = { "air" : uniformNr+1.0j*uniformNi, "pml" : uniformNr}
+
+        # Set refractive index of pixels
+        for i in range(Nx*Ny):
+            geo.SetMaterial(4+i, "pix"+str(i))
+            nmats["pix"+str(i)] = pixNr[i]
+            
+        for i in range(len(scatNrefrUnique[np.real(scatNrefrUnique < useDirichlet)])):
+            geo.SetMaterial(4+Nx*Ny+i, "scat"+str(i))
+            nmats["scat"+str(i)] = scatNrefrUnique[i] + (uniformNr-1.0)+1.0j*uniformNi
+
+        # Set maximal height of triangles in domains of scatterers
+        if meshScatRefine is True:
+            for i in range(len(scatNrefrUnique)):
+                if scatNrefrUnique[i] <= useDirichlet:
+                    geo.SetDomainMaxH(4+Nx*Ny+i,maxhVac/np.real(nmats["scat"+str(i)]))
+
+        # Create mesh
+        with TaskManager():
+            ngmesh = geo.GenerateMesh(maxh=maxhVac)
+            mesh = Mesh(ngmesh)
+        
+        # Define coefficient function for refractive index using defined materials for predefined domains
+        ncoef = [nmats[mat] for mat in mesh.GetMaterials()]
+        nrefr = CoefficientFunction(ncoef)
+    
+    # Empty waveguide        
+    else:
+        
+        # Assigning material names to domains
+        geo.SetMaterial(1, "air")
+        geo.SetMaterial(2, "pml")
+        geo.SetMaterial(3, "pml")
+
+        # Define coefficient function for refractive index using defined materials for predefined domains
+        nmats = { "air" : uniformNr+1.0j*uniformNi, "pml" : uniformNr}
+
+        if len(pixNr) != Nx*Ny:
+            pixNr = np.hstack((pixNr, np.ones(Nx*Ny - len(pixNr))))
+            
+        # Set refractive index of pixels
+        for i in range(Nx*Ny):
+            geo.SetMaterial(4+i, "pix"+str(i))
+            nmats["pix"+str(i)] = pixNr[i]
+
+        # Create mesh
+        with TaskManager():
+            ngmesh = geo.GenerateMesh(maxh=maxhVac)
+            mesh = Mesh(ngmesh)
+         
+        ncoef = [nmats[mat] for mat in mesh.GetMaterials()]
+        nrefr = CoefficientFunction(ncoef)
+        
+    # Set perfectly matched layers in Radial coordinates on domain 2
+    pR = pml.Radial((0, 0), pmlRad, alpha=2j)
+    mesh.SetPML(pR,2)
+
+    # Refine mesh at the edge points for which refinement values are added
+    mesh.RefineHP(refOrder, factor=refFactor)
+
+    # Used curved elements at curved boundaries
+    if meshCurve is True:
+        mesh.Curve(3)
+    # Manually set how the mesh should be curved
+    elif meshCurve is not False and meshCurve is not None:
+        mesh.Curve(meshCurve)
+
+    # Output number of vertices in mesh
+    if msgOutput is True:
+        print('MESH number of vertices =', mesh.nv)
+    
+    # Reset inverted system matrix
+    params['ainvGlobal'] = None
+    params['mesh'] = mesh
+    params['nrefr'] = nrefr
+    params['nmats'] = nmats
+
+def updateNrefr(params, pixNr):
+    
+    nmats = params['nmats']
+    mesh = params['mesh']
+    
+    # Set the material's new refractive index and create new CoefficientFunction
+    for i in range(len(pixNr)):
+        nmats['pix'+str(i)] = pixNr[i]
+    
+    ncoef = [nmats[mat] for mat in mesh.GetMaterials()]
+    nrefr = CoefficientFunction(ncoef)
+    
+    # Reset the stored inverted system matrix
+    params['ainvGlobal'] = None
+    params['nrefr'] = nrefr
+    params['nmats'] = nmats
+
+def CalcOutputState(params, state, pphwl=20, returnPhis=False):
+    nIn = params['nIn']
+    k = params['k']
+    pmlRad = params['pmlRad']
+    
+    npts = int(ceil(2*pmlRad*k*pphwl))
+    phis = np.linspace(-np.pi,np.pi,num=npts)
+    
+    basis = lambda phi,n: np.exp(-1.0j*n*phi)*sp.special.hankel1(n,k*pmlRad)/(np.sqrt(2*np.pi)*np.abs(sp.special.hankel1(n,k*pmlRad)))
+    
+    func = np.zeros(npts, dtype=complex)
+    for i in range(0, 2*nIn+1):
+        func += state[i] * basis(phis, i-nIn)
+    
+    if returnPhis is False:
+        return func
+    else:  
+        return phis, func
+
+def CalcPhiOutOperator(params):
+    k = params['k']
+    pmlRad = params['pmlRad']
+    nIn = params['nIn']
+    nOut = params['nOut']
+    
+    phi = np.eye(2*nIn+1, dtype=complex) * np.pi
+    
+    c = np.exp(1.0j*np.angle(sp.special.hankel1(np.arange(-nIn, nIn+1), k*pmlRad)))
+    
+    for m in range(-nOut,nOut+1):
+        for n in range(-nIn,nIn+1):
+            if m != n:
+                phi[m+nOut,n+nIn] = -1.0j/(m-n)*np.conjugate(c[m+nOut])*c[n+nIn]
+                
+    phievals, phicoefs = np.linalg.eig(phi)
+    
+    isort = np.real(phievals).argsort()
+    phievals = phievals[isort]
+    phicoefs = phicoefs[:,isort]
+    
+    return phievals, phicoefs, phi
+
+def calcQsROI(params, ROI, ROICenter, sqphwl=None, timer=False):
+    nIn = params['nIn']
+    mesh = params['mesh']
+    k = params['k']
+    
+    if sqphwl is not None:
+        dyRes = (2*np.pi/np.real(k))/2.0/float(sqphwl)
+        dxRes = dyRes
+        Ny = int(np.ceil(ROI[1]/dyRes))
+        Nx = int(np.ceil(ROI[0]/dxRes))
+
+    xs = np.linspace(ROICenter[0]-ROI[0]/2+ROI[0]/Nx/2, ROICenter[0]+ROI[0]/2-ROI[0]/Nx/2, num=Nx)
+    ys = np.linspace(ROICenter[1]-ROI[1]/2+ROI[1]/Ny/2, ROICenter[1]+ROI[1]/2-ROI[1]/Ny/2, num=Ny)
+
+    XS, YS = np.meshgrid(xs,ys)
+    XS_flat = XS.T.flatten()
+    YS_flat = YS.T.flatten()
+    
+    Qn = np.zeros((Nx*Ny,2*nIn+1,2*nIn+1), dtype=complex)
+    
+    if timer == True:
+        st = timeit.default_timer()
+    sols = Solve(params, np.eye(2*nIn+1), msgOutput=False)
+        
+    stateGrid = np.zeros((2*nIn+1, Nx*Ny), dtype=complex)
+    for i in range(2*nIn+1):
+        for j in range(Nx*Ny):
+            stateGrid[i,j] = sols[i](mesh(XS_flat[j],YS_flat[j]))
+        
+    if timer == True: 
+        print('EM-Simulations && Interpolation: %fs' %(timeit.default_timer() - st))
+        st = timeit.default_timer()
+        
+    for i in range(2*nIn+1):
+        for j in range(i,2*nIn+1):
+            if i == j:
+                Qn[:,i,j] = np.abs(stateGrid[i,:])**2
+            else:
+                I = np.abs(stateGrid[i,:] + stateGrid[j,:])**2 + 0.j
+                I -= np.abs(stateGrid[i,:] - stateGrid[j,:])**2
+                I += 1.0j*np.abs(stateGrid[i,:] - 1.0j*stateGrid[j,:])**2
+                I -= 1.0j*np.abs(stateGrid[i,:] + 1.0j*stateGrid[j,:])**2
+                
+                Qn[:,i,j] = I/4
+                Qn[:,j,i] = np.conjugate(I)/4
+    
+    if timer == True:
+        print('Calc Qs: %fs' %(timeit.default_timer() - st))
+        
+    #return k**2*Qn/2
+    return Qn
