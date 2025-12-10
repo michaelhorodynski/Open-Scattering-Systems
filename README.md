@@ -33,7 +33,6 @@ Open scattering systems can be referenced by citing the following paper
 > Michael Horodynski, Tobias Reiter, Matthias Kühmayer, and Stefan Rotter
 > "Tractor beams with optimal pulling force using structured waves",
 > [Phys. Rev. A 108, 023504 (2023)](https://journals.aps.org/pra/abstract/10.1103/PhysRevA.108.023504)
-> [arXiv:2305.03316](https://arxiv.org/abs/2305.03316)
 
 Contact us
 ----------
